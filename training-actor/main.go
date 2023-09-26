@@ -21,6 +21,21 @@ type TrainingActor struct {
 type Train struct {
 }
 
+type WeightsBiases struct {
+	Layer_1_weights [13][64]float64
+	Layer_1_biases  []float64
+	Layer_2_weights [64][128]float64
+	Layer_2_biases  []float64
+	Layer_3_weights [128][128]float64
+	Layer_3_biases  []float64
+	Layer_4_weights [128][64]float64
+	Layer_4_biases  []float64
+	Layer_5_weights [64][32]float64
+	Layer_5_biases  []float64
+	Layer_6_weights [32][1]float64
+	Layer_6_biases  []float64
+}
+
 func (state *SetBehaviorActor) Receive(context actor.Context) {
 	state.behavior.Receive(context)
 }
