@@ -2,7 +2,10 @@ module federated-learning-project
 
 go 1.20
 
-require github.com/asynkron/protoactor-go v0.0.0-20230916135836-b14bb1f51af6
+require (
+	github.com/asynkron/goconsole v0.0.0-20160504192649-bfa12eebf716
+	github.com/asynkron/protoactor-go v0.0.0-20230916135836-b14bb1f51af6
+)
 
 require (
 	github.com/Workiva/go-datastructures v1.1.1 // indirect
