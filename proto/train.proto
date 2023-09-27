@@ -1,0 +1,24 @@
+syntax = "proto3";
+package proto;
+option go_package = "federated-learning-broj2/proto";
+
+message TrainReq {
+    string SenderAddress = 1;
+    string SenderId = 2;
+    bytes marshalledWeights = 3;
+}
+
+message Response {
+    WeightsList Weights = 1;
+}
+message WeightsList {
+  repeated WeightsListInner inner_list = 1;
+}
+
+message WeightsListInner {
+  repeated float value_list = 1;
+}
+
+message TrainResp {
+  bytes data = 1;
+}

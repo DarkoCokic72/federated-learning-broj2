@@ -1,13 +1,15 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
+	"federated-learning-project/proto"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 
+	console "github.com/asynkron/goconsole"
 	"github.com/asynkron/protoactor-go/actor"
+	"github.com/asynkron/protoactor-go/remote"
 )
 
 type Hello struct{ Who string }
@@ -16,6 +18,7 @@ type SetBehaviorActor struct {
 }
 
 type TrainingActor struct {
+	behavior actor.Behavior
 }
 
 type Train struct {
@@ -41,33 +44,7 @@ func (state *SetBehaviorActor) Receive(context actor.Context) {
 }
 
 func (state *TrainingActor) Receive(context actor.Context) {
-	switch msg := context.Message().(type) {
-	case Train:
-		fmt.Println(msg)
-
-		client := &http.Client{}
-
-		req, err := http.NewRequest("POST", "http://127.0.0.1:5000/train", nil)
-		if err != nil {
-			panic(err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-
-		response, err := client.Do(req)
-		if err != nil {
-			panic(err)
-		}
-		defer response.Body.Close()
-
-		content, err := io.ReadAll(response.Body)
-		if err != nil {
-			panic(err)
-		}
-
-		fmt.Print(string(content))
-
-	}
+	state.behavior.Receive(context)
 }
 
 func (state *SetBehaviorActor) One(context actor.Context) {
@@ -99,20 +76,69 @@ func NewTrainingActor() actor.Actor {
 	return act
 }
 
+func NewSetTrainingActorBehavior() actor.Actor {
+	actor := &TrainingActor{
+		behavior: actor.NewBehavior(),
+	}
+
+	actor.behavior.Become(actor.Trainable)
+	return actor
+}
+
+func (state *TrainingActor) Trainable(context actor.Context) {
+	switch msg := context.Message().(type) {
+	case *proto.TrainReq:
+		fmt.Println("Training started")
+
+		client := &http.Client{}
+
+		data := bytes.NewBuffer(msg.MarshalledWeights)
+
+		req, err := http.NewRequest("POST", "http://127.0.0.1:5000/train", data)
+		if err != nil {
+			panic(err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+
+		response, err := client.Do(req)
+		if err != nil {
+			panic(err)
+		}
+		defer response.Body.Close()
+
+		content, err := io.ReadAll(response.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Print(string(content))
+
+		var senderPID actor.PID
+		senderPID.Address = msg.SenderAddress
+		senderPID.Id = msg.SenderId
+
+		context.Send(&senderPID, &proto.TrainResp{
+			Data: content,
+		})
+
+	}
+}
+
+func (state *TrainingActor) Training(context actor.Context) {
+	switch msg := context.Message().(type) {
+	case *proto.TrainReq:
+		fmt.Printf("Training is already in motion: sent by %v \n", msg.SenderId)
+
+	}
+}
+
 func main() {
 	system := actor.NewActorSystem()
-	context := system.Root
-	props := actor.PropsFromProducer(NewSetBehaviorActor)
-	pid := context.Spawn(props)
+	remoteConfiguration := remote.Configure("127.0.0.1", 8090)
+	remoting := remote.NewRemote(system, remoteConfiguration)
+	remoting.Start()
 
-	trainActorProps := actor.PropsFromProducer(NewTrainingActor)
-	trainingActorPid := context.Spawn(trainActorProps)
-
-	context.Send(pid, Hello{Who: "Roger"})
-	context.Send(pid, Hello{Who: "Roger"})
-
-	context.Send(trainingActorPid, Train{})
-
-	reader := bufio.NewReader(os.Stdin)
-	reader.ReadString('\n')
+	remoting.Register("training_actor", actor.PropsFromProducer(NewSetTrainingActorBehavior))
+	console.ReadLine()
 }

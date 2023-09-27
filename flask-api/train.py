@@ -8,21 +8,18 @@ from keras import layers
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-def train_neural_network():
+def train_neural_network(weigts = None):
     df = pd.read_csv('heart.csv', delimiter=',')
     columns = df.columns.ravel()
 
     output = np.where(columns == 'output')[0][0]
 
-    X = df.iloc[:, :output]
-    Y = df.iloc[:, output:]
-
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, train_size=0.8, shuffle=True)
+    X_train = df.iloc[:, :output]
+    Y_train = df.iloc[:, output:]
 
     scaler = StandardScaler()
 
     X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=X_train.columns)
-    X_test = pd.DataFrame(scaler.fit_transform(X_test), columns=X_test.columns)
 
     model = keras.Sequential([
         layers.Dense(64, activation='sigmoid', input_shape=(13,)),
@@ -35,9 +32,29 @@ def train_neural_network():
 
     model.compile(optimizer='adagrad', loss='binary_crossentropy', metrics=['accuracy'])
 
-    model.fit(X_train, Y_train, epochs=30, verbose=1)
+    if weigts is not None:
+        weigt_layer1 = weigts["Layer_1_weights"]
+        weigt_layer2 = weigts["Layer_2_weights"]
+        weigt_layer3 = weigts["Layer_3_weights"]
+        weigt_layer4 = weigts["Layer_4_weights"]
+        weigt_layer5 = weigts["Layer_5_weights"]
+        weigt_layer6 = weigts["Layer_6_weights"]
 
-    y_pred = model.predict(X_test)
+        bias_layer1 = weigts["Layer_1_biases"]
+        bias_layer2 = weigts["Layer_2_biases"]
+        bias_layer3 = weigts["Layer_3_biases"]
+        bias_layer4 = weigts["Layer_4_biases"]
+        bias_layer5 = weigts["Layer_5_biases"]
+        bias_layer6 = weigts["Layer_6_biases"]
+
+        model.layers[0].set_weights([np.array(weigt_layer1), np.array(bias_layer1)])
+        model.layers[1].set_weights([np.array(weigt_layer2), np.array(bias_layer2)])
+        model.layers[2].set_weights([np.array(weigt_layer3), np.array(bias_layer3)])
+        model.layers[3].set_weights([np.array(weigt_layer4), np.array(bias_layer4)])
+        model.layers[4].set_weights([np.array(weigt_layer5), np.array(bias_layer5)])
+        model.layers[5].set_weights([np.array(weigt_layer6), np.array(bias_layer6)])
+
+    model.fit(X_train, Y_train, epochs=30, verbose=1)
 
     weights = model.get_weights()
 

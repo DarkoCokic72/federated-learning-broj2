@@ -16,5 +16,5 @@ df_2 = df.iloc[middle:, :]
 df_1 = df_1.reset_index(drop=True)
 df_2 = df_2.reset_index(drop=True)
 
-df_1.to_csv('heart1.csv')
-df_2.to_csv('heart2.csv')
+df_1.to_csv('heart1.csv', index=False)
+df_2.to_csv('heart2.csv', index=False)
