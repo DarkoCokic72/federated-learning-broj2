@@ -1,10 +1,14 @@
 package actors
 
 import (
+	"encoding/json"
+	"federated-learning-project/proto"
 	"fmt"
-
 	console "github.com/asynkron/goconsole"
 	"github.com/asynkron/protoactor-go/actor"
+	"os"
+	"strconv"
+	"time"
 )
 
 type InitializerActor struct {
@@ -17,6 +21,15 @@ type CoordinatorActor struct {
 	selfPID       *actor.PID
 	parentPID     *actor.PID
 	aggregatorPID *actor.PID
+
+	roundsTrained  uint
+	maxRounds      uint
+	actorsTraining uint
+
+	children *actor.PIDSet
+	weights  []WeightsBiases
+
+	behavior actor.Behavior
 }
 
 type AggregatorActor struct {
@@ -51,6 +64,16 @@ type CalculateAverage struct {
 
 type UpdatedWeights struct{}
 
+type spawnedRemoteActor struct {
+	remoteActorPID *actor.PID
+}
+
+type startTraining struct{}
+
+type weightsUpdated struct{}
+
+type trainingFinished struct{}
+
 func newInitializatorActor() actor.Actor {
 	return &InitializerActor{}
 }
@@ -67,6 +90,7 @@ func (state *InitializerActor) Receive(context actor.Context) {
 	switch msg := context.Message().(type) {
 
 	case *actor.PID:
+
 		coordinatorProps := actor.PropsFromProducer(newCoordinatorActor)
 		coordinatorPID := context.Spawn(coordinatorProps)
 		aggregatorProps := actor.PropsFromProducer(newAggregatorActor)
@@ -76,19 +100,135 @@ func (state *InitializerActor) Receive(context actor.Context) {
 		state.coordinatorPID = coordinatorPID
 		state.aggregatorPID = aggregatorPID
 
-		context.Send(coordinatorPID, PidsStruct{initPID: state.selfPID, coordinatorPID: state.coordinatorPID, aggregatorPID: state.aggregatorPID})
+		msg1 := PidsStruct{initPID: msg, coordinatorPID: coordinatorPID, aggregatorPID: aggregatorPID}
+		context.Send(coordinatorPID, msg1)
 
+		msg2 := PidsStruct{initPID: msg, aggregatorPID: aggregatorPID}
+		context.Send(aggregatorPID, msg2)
+
+		fmt.Printf("Initialized all actors %v\n", time.Now())
+
+	case spawnedRemoteActor:
+		// Passing the message to the cooridnator actor
+		fmt.Printf("Spawned remote actor %v at %v\n", msg.remoteActorPID, time.Now())
+		context.Send(state.coordinatorPID, msg)
+	case startTraining:
+		// Passing the message to the cooridnator actor
+		context.Send(state.coordinatorPID, msg)
+	case weightsUpdated:
+		// Once the weights are updated, let coordinator know
+		context.Send(state.coordinatorPID, msg)
+	case trainingFinished:
+		// Once the training is finished we can serialize
+		// the new weights
+		file, err := os.Create("weightModel.json")
+
+		if err != nil {
+			panic(err)
+		}
+
+		defer file.Close()
+		encoder := json.NewEncoder(file)
+
+		encodingError := encoder.Encode(globalModel)
+		if encodingError != nil {
+			panic(err)
+		}
+		fmt.Println("Successfully written the weights to 'weightModel.json' file!")
 	}
 }
 
 func (state *CoordinatorActor) Receive(context actor.Context) {
+	state.behavior.Receive(context)
+}
+
+func (state *CoordinatorActor) Training(context actor.Context) {
 	switch msg := context.Message().(type) {
+	case *actor.Started:
+		state.children = actor.NewPIDSet()
 	case PidsStruct:
 		if msg.initPID == nil {
-			state.parentPID = msg.initPID
-			state.selfPID = msg.coordinatorPID
-			state.aggregatorPID = msg.aggregatorPID
+			return
 		}
+		state.parentPID = msg.initPID
+		state.selfPID = msg.coordinatorPID
+		state.aggregatorPID = msg.aggregatorPID
+
+		state.maxRounds = 10
+		state.roundsTrained = 0
+		state.actorsTraining = 0
+	case startTraining:
+		state.weights = []WeightsBiases{}
+		fmt.Printf("Starting a new round of training at %v\n", time.Now())
+		// If we have reached maximum rounds of training we exit
+		if state.roundsTrained >= state.maxRounds {
+			fmt.Printf("Reached a maximum of %v training rounds.\n", state.maxRounds)
+			msg3 := trainingFinished{}
+			context.Send(state.parentPID, msg3)
+
+			return
+		}
+		// Create a training reqeuest message which will be sent
+		// to all the training actors
+		weightsJson, marshalErr := json.Marshal(globalModel)
+
+		if marshalErr != nil {
+			panic(marshalErr)
+		}
+
+		senderAddress := localAddress + ":" + strconv.Itoa(port)
+		trainMessage := &proto.TrainReq{
+			SenderAddress: senderAddress,
+			// proveri ovde sta treba
+			SenderId: state.pid.Id,
+			// proveri ovde sta treba
+			marshalledWeights: weightsJson,
+		}
+		// Send the message to all the training actors
+		state.children.ForEach(func(i int, pid *actor.PID) {
+			msg4 := trainMessage
+			context.Send(pid, msg4)
+			state.actorsTraining += 1
+		})
+		state.roundsTrained += 1
+		fmt.Println("TRAINING ROUND: ", state.roundsTrained)
+	case *proto.TrainResp:
+		fmt.Printf("Got a training response %v\n", time.Now())
+		// Another node finished training
+		state.actorsTraining -= 1
+		// Convert the weights and add it to the weight list of this round of training
+		var deserializedWeights WeightsBiases
+		json.Unmarshal(msg.Data, &deserializedWeights)
+
+		weightsToAvg := append(state.weights, deserializedWeights)
+		state.weights = weightsToAvg
+
+		// All nodes finished training
+		// send the weights to the aggregator
+		if state.actorsTraining == 0 {
+			fmt.Printf("All actors finished training, the round %v has ended at %v\n", state.roundsTrained, time.Now())
+			// proveri ovde sta treba
+			msg5 := CalculateAverage{weights: weightsToAvg}
+			context.Send(state.aggregatorPID, msg5)
+			// proveri ovde sta treba
+			state.behavior.Become(state.weights)
+		}
+	}
+}
+
+// This state signifies that one round of training is over
+// so we have to wait until the weights are averaged and updated
+// to start a new training round
+func (state *CoordinatorActor) WeightCalculating(context actor.Context) {
+
+	switch msg := context.Message().(type) {
+	case startTraining:
+		fmt.Println("Waiting for new weight model!")
+		fmt.Printf("msg: %v\n", msg)
+	case weightsUpdated:
+		state.behavior.Become(state.Training)
+		msg6 := startTraining{}
+		context.Send(state.parentPID, msg6)
 	}
 }
 
@@ -96,14 +236,22 @@ func (state *AggregatorActor) Receive(context actor.Context) {
 	switch msg := context.Message().(type) {
 	case PidsStruct:
 		if msg.initPID == nil {
-			state.parentPID = msg.initPID
-			state.selfPID = msg.aggregatorPID
+			return
 		}
+		state.parentPID = msg.initPID
+		state.selfPID = msg.aggregatorPID
+		// Once all the training actors have finished
+	// we send all the weights to the aggregator
+	// that calculates the average
+	// Once it is done it tell the coordinator that it has finished
+	// so it can start another round of training
 	case CalculateAverage:
-		fmt.Println("Averaging weights started")
-		fmt.Println("Lenght of all weights: ", len(msg.Weights))
+		fmt.Printf("Averaging the weights %v\n", time.Now())
+		fmt.Println("Length of all weights array:", len(msg.Weights))
 		FederatedAverageAlgo(msg.Weights)
-		context.Send(state.parentPID, UpdatedWeights{})
+		fmt.Printf("Weights have been averaged %v\n", time.Now())
+		msg7 := weightsUpdated{}
+		context.Send(state.parentPID, msg7)
 	}
 
 }
@@ -371,6 +519,8 @@ func FederatedAverageAlgo(weights []WeightsBiases) {
 }
 
 var globalModel WeightsBiases
+var localAddress string
+var port int
 
 func main() {
 	system := actor.NewActorSystem()
