@@ -10,6 +10,7 @@ import (
 
 	console "github.com/asynkron/goconsole"
 	"github.com/asynkron/protoactor-go/actor"
+	"github.com/asynkron/protoactor-go/remote"
 )
 
 type InitializerActor struct {
@@ -520,6 +521,21 @@ var localAddress string
 var port int
 
 func main() {
+	localAddress = "127.0.0.1"
+	port = 8000
+
+	file, openingErr := os.Open("weightModel.json")
+	if openingErr != nil {
+		panic(openingErr)
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	deserializingError := decoder.Decode(&globalModel)
+	if deserializingError != nil {
+		panic(deserializingError)
+	}
+
 	system := actor.NewActorSystem()
 	decider := func(reason interface{}) actor.Directive {
 		fmt.Println("handling failure for child")
@@ -534,6 +550,27 @@ func main() {
 	pid := rootContext.Spawn(props)
 
 	rootContext.Send(pid, pid)
+
+	remoteConfig := remote.Configure(localAddress, port)
+	remoting := remote.NewRemote(system, remoteConfig)
+	remoting.Start()
+
+	spawnResponse, err1 := remoting.SpawnNamed("127.0.0.1:8091", "training_actor", "training_actor", time.Second)
+	// spawnResponse1, err2 := remoting.SpawnNamed("192.168.0.24:8091", "training_actor", "training_actor", time.Second)
+
+	if err1 != nil {
+		panic(err1)
+	}
+	// if err2 != nil {
+	// 	panic(err2)
+	// }
+	spawnedActorMessage := spawnedRemoteActor{remoteActorPID: spawnResponse.Pid}
+	// spawnedActorMessage1 := spawnedRemoteActor{remoteActorPID: spawnResponse1.Pid}
+
+	rootContext.Send(pid, spawnedActorMessage)
+	//rootContext.Send(pid, spawnedActorMessage1)
+
+	rootContext.Send(pid, startTraining{})
 
 	_, _ = console.ReadLine()
 }
