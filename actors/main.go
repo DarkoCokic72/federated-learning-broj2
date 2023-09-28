@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"federated-learning-project/proto"
 	"fmt"
-	console "github.com/asynkron/goconsole"
-	"github.com/asynkron/protoactor-go/actor"
 	"os"
 	"strconv"
 	"time"
+
+	console "github.com/asynkron/goconsole"
+	"github.com/asynkron/protoactor-go/actor"
 )
 
 type InitializerActor struct {
@@ -178,11 +179,9 @@ func (state *CoordinatorActor) Training(context actor.Context) {
 
 		senderAddress := localAddress + ":" + strconv.Itoa(port)
 		trainMessage := &proto.TrainReq{
-			SenderAddress: senderAddress,
-			// proveri ovde sta treba
-			SenderId: state.pid.Id,
-			// proveri ovde sta treba
-			marshalledWeights: weightsJson,
+			SenderAddress:     senderAddress,
+			SenderId:          state.selfPID.Id,
+			MarshalledWeights: weightsJson,
 		}
 		// Send the message to all the training actors
 		state.children.ForEach(func(i int, pid *actor.PID) {
@@ -207,11 +206,9 @@ func (state *CoordinatorActor) Training(context actor.Context) {
 		// send the weights to the aggregator
 		if state.actorsTraining == 0 {
 			fmt.Printf("All actors finished training, the round %v has ended at %v\n", state.roundsTrained, time.Now())
-			// proveri ovde sta treba
-			msg5 := CalculateAverage{weights: weightsToAvg}
+			msg5 := CalculateAverage{Weights: weightsToAvg}
 			context.Send(state.aggregatorPID, msg5)
-			// proveri ovde sta treba
-			state.behavior.Become(state.weights)
+			state.behavior.Become(state.WeightCalculating)
 		}
 	}
 }
