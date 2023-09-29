@@ -88,12 +88,20 @@ func newAggregatorActor() actor.Actor {
 	return &AggregatorActor{}
 }
 
+func NewSetCoordinatorBehavior() actor.Actor {
+	act := &CoordinatorActor{
+		behavior: actor.NewBehavior(),
+	}
+	act.behavior.Become(act.Training)
+	return act
+}
+
 func (state *InitializerActor) Receive(context actor.Context) {
 	switch msg := context.Message().(type) {
 
 	case *actor.PID:
 
-		coordinatorProps := actor.PropsFromProducer(newCoordinatorActor)
+		coordinatorProps := actor.PropsFromProducer(NewSetCoordinatorBehavior)
 		coordinatorPID := context.Spawn(coordinatorProps)
 		aggregatorProps := actor.PropsFromProducer(newAggregatorActor)
 		aggregatorPID := context.Spawn(aggregatorProps)
@@ -521,10 +529,10 @@ var localAddress string
 var port int
 
 func main() {
-	localAddress = "127.0.0.1"
+	localAddress = "192.168.188.14"
 	port = 8000
 
-	file, openingErr := os.Open("actors/weightModel.json")
+	file, openingErr := os.Open("weightModel.json")
 	if openingErr != nil {
 		panic(openingErr)
 	}
@@ -555,13 +563,16 @@ func main() {
 	remoting := remote.NewRemote(system, remoteConfig)
 	remoting.Start()
 
-	spawnResponse, err1 := remoting.SpawnNamed("127.0.0.1:8091", "training_actor", "training_actor", time.Second)
-	spawnResponse1, err2 := remoting.SpawnNamed("192.168.188.14:8090", "training_actor", "training_actor", time.Second)
+	spawnResponse, err1 := remoting.SpawnNamed("192.168.188.14:8091", "training_actor", "training_actor", 10*time.Second)
+	spawnResponse1, err2 := remoting.SpawnNamed("192.168.188.237:8090", "training_actor", "training_actor", 10*time.Second)
 
 	if err1 != nil {
+		fmt.Println("panika 1")
 		panic(err1)
+
 	}
 	if err2 != nil {
+		fmt.Println("panika 2")
 		panic(err2)
 	}
 	spawnedActorMessage := spawnedRemoteActor{remoteActorPID: spawnResponse.Pid}
