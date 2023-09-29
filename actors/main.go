@@ -1,4 +1,4 @@
-package actors
+package main
 
 import (
 	"encoding/json"
@@ -556,19 +556,19 @@ func main() {
 	remoting.Start()
 
 	spawnResponse, err1 := remoting.SpawnNamed("127.0.0.1:8091", "training_actor", "training_actor", time.Second)
-	// spawnResponse1, err2 := remoting.SpawnNamed("192.168.0.24:8091", "training_actor", "training_actor", time.Second)
+	spawnResponse1, err2 := remoting.SpawnNamed("192.168.0.24:8091", "training_actor", "training_actor", time.Second)
 
 	if err1 != nil {
 		panic(err1)
 	}
-	// if err2 != nil {
-	// 	panic(err2)
-	// }
+	if err2 != nil {
+		panic(err2)
+	}
 	spawnedActorMessage := spawnedRemoteActor{remoteActorPID: spawnResponse.Pid}
-	// spawnedActorMessage1 := spawnedRemoteActor{remoteActorPID: spawnResponse1.Pid}
+	spawnedActorMessage1 := spawnedRemoteActor{remoteActorPID: spawnResponse1.Pid}
 
 	rootContext.Send(pid, spawnedActorMessage)
-	//rootContext.Send(pid, spawnedActorMessage1)
+	rootContext.Send(pid, spawnedActorMessage1)
 
 	rootContext.Send(pid, startTraining{})
 
