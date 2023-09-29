@@ -524,7 +524,7 @@ func main() {
 	localAddress = "127.0.0.1"
 	port = 8000
 
-	file, openingErr := os.Open("weightModel.json")
+	file, openingErr := os.Open("actors/weightModel.json")
 	if openingErr != nil {
 		panic(openingErr)
 	}
@@ -556,7 +556,7 @@ func main() {
 	remoting.Start()
 
 	spawnResponse, err1 := remoting.SpawnNamed("127.0.0.1:8091", "training_actor", "training_actor", time.Second)
-	spawnResponse1, err2 := remoting.SpawnNamed("192.168.0.24:8091", "training_actor", "training_actor", time.Second)
+	spawnResponse1, err2 := remoting.SpawnNamed("192.168.188.14:8090", "training_actor", "training_actor", time.Second)
 
 	if err1 != nil {
 		panic(err1)
