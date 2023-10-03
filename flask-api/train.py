@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 def train_neural_network(weigts = None):
-    df = pd.read_csv('heart.csv', delimiter=',')
+    df = pd.read_csv('flask-api/heart.csv', delimiter=',')
     columns = df.columns.ravel()
 
     output = np.where(columns == 'output')[0][0]

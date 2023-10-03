@@ -135,7 +135,7 @@ func (state *TrainingActor) Training(context actor.Context) {
 
 func main() {
 	system := actor.NewActorSystem()
-	remoteConfiguration := remote.Configure("192.168.188.14", 8091)
+	remoteConfiguration := remote.Configure("192.168.188.237", 8090)
 	remoting := remote.NewRemote(system, remoteConfiguration)
 	remoting.Start()
 

@@ -154,6 +154,7 @@ func (state *CoordinatorActor) Receive(context actor.Context) {
 
 func (state *CoordinatorActor) Training(context actor.Context) {
 	switch msg := context.Message().(type) {
+	//internal state
 	case *actor.Started:
 		state.children = actor.NewPIDSet()
 	case PidsStruct:
